@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: 2026 Claire Tam <claire2026t@posteo.net>
+#
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: Setup build environment
+description: Nix, binary cache, ccache and a warm dev shell
+
+inputs:
+  trusted:
+    description: >-
+      "false" for builds of PR code: caches are only restored, never saved,
+      so they can't be poisoned for release builds.
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - uses: nixbuild/nix-quick-install-action@v35
+
+    - if: inputs.trusted == 'true'
+      uses: Mic92/hestia@v3
+
+    - if: inputs.trusted == 'true'
+      uses: actions/cache@v6
+      with:
+        path: .ccache
+        key: ${{ runner.os }}-ccache-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: ${{ runner.os }}-ccache-
+
+    - if: inputs.trusted != 'true'
+      uses: actions/cache/restore@v6
+      with:
+        path: .ccache
+        key: ${{ runner.os }}-ccache-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: ${{ runner.os }}-ccache-
+
+    - name: Preheat Nix Environment
+      shell: bash
+      run: nix develop --command true

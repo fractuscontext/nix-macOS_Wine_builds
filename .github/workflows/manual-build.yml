@@ -1,0 +1,62 @@
+# SPDX-FileCopyrightText: 2026 Claire Tam <claire2026t@posteo.net>
+#
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: Manual Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Release build?"
+        type: boolean
+        default: false
+      flavour:
+        description: "Flavour"
+        type: choice
+        options: [latest, crossover]
+        default: "latest"
+      commit:
+        description: "Commit hash of this repo (empty = branch HEAD)"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.commit || github.sha }}
+
+      - uses: ./.github/actions/setup
+
+      - name: just ci
+        id: ci
+        env:
+          CI_EVENT: workflow_dispatch
+          CI_FLAVOUR: ${{ inputs.flavour }}
+          CI_RELEASE: ${{ inputs.release }}
+        run: nix develop --command just ci
+
+      - name: Release
+        if: ${{ !cancelled() && steps.ci.outputs.to_release == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          target=$(git rev-parse HEAD)
+          while read -r tag; do
+            gh release create "$tag" "output/$tag.zip" --target "$target" --title "$tag" --generate-notes
+          done < output/releases.txt
+
+      - name: Upload Build
+        if: ${{ !cancelled() && steps.ci.outputs.to_release != 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: wine-${{ inputs.flavour }}-${{ github.run_id }}
+          path: output/*.zip
+          compression-level: 0
+          retention-days: 7

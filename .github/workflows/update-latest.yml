@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: 2026 Claire Tam <claire2026t@posteo.net>
+#
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Daily check for a new WineHQ release tag; opens a PR when the pin moves.
+name: Update Wine (latest tag)
+
+on:
+  schedule:
+    - cron: "17 15 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: nixbuild/nix-quick-install-action@v35
+      - uses: Mic92/hestia@v3
+
+      - name: just update-source wine-latest
+        run: |
+          for i in {1..5}; do
+            nix develop --command just update-source wine-latest && exit 0
+            s=$?
+            echo "Attempt $i/5 failed, retrying in 10 seconds..."
+            sleep 10
+          done
+          exit "$s"
+
+      # Keep `nix develop` from installing pre-commit hooks that would run on the bot's commit
+      - name: Disable Git Hooks
+        run: git config core.hooksPath /dev/null
+
+      - uses: peter-evans/create-pull-request@v8
+        with:
+          branch: update/wine-latest
+          title: "Update Wine to the latest release tag"
+          commit-message: "chore(sources): bump wine-latest"
+          body: Automated nvfetcher run found a new WineHQ release tag.
