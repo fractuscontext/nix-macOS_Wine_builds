@@ -1,0 +1,55 @@
+# SPDX-FileCopyrightText: 2026 Claire Tam <claire2026t@posteo.net>
+#
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Every push and PR configures; a pin bump pushed to main builds and releases.
+# The decision lives in scripts/ci.py.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # Never cancel a run on main, it may be mid-release
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: write
+
+jobs:
+  ci:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - id: setup
+        uses: ./.github/actions/setup
+
+      - name: just ci
+        id: ci
+        env:
+          CI_EVENT: ${{ github.event_name }}
+          CI_REF: ${{ github.ref }}
+          CI_BASE: ${{ github.event.before || github.event.pull_request.base.sha }}
+        run: nix develop --command just ci
+
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: .ccache
+          key: ${{ steps.setup.outputs.ccache-key }}
+
+      - name: Release
+        if: ${{ !cancelled() && steps.ci.outputs.to_release == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          while read -r tag; do
+            gh release create "$tag" "output/$tag.zip" --target "$GITHUB_SHA" --title "$tag" --generate-notes
+          done < output/releases.txt

@@ -1,47 +1,40 @@
 # SPDX-FileCopyrightText: 2026 Claire Tam <claire2026t@posteo.net>
+#
 # SPDX-License-Identifier: GPL-3.0-only
 
-name: Gh Actions Benchmark
+# Time `nix develop` for every Nix installer × store cache combination.
+name: Benchmark Nix Setup
 
 on:
   workflow_dispatch:
 
 jobs:
-  cache-race:
+  benchmark:
     name: ${{ matrix.installer }} + ${{ matrix.cache }}
+    runs-on: macos-15
     strategy:
       fail-fast: false
       matrix:
-        installer:
-          - cachix-installer
-          - determinate-installer
-          - nixbuild-installer
-          - nixos-installer
-        cache:
-          - magic-nix-cache
-          - hestia
-          - cache-nix-action
-          - none
-
-    runs-on: macos-15
+        installer: [cachix, determinate, nixbuild, nixos]
+        cache: [magic-nix-cache, hestia, cache-nix-action, none]
 
     steps:
       - uses: actions/checkout@v7
 
-      - if: matrix.installer == 'cachix-installer'
+      - if: matrix.installer == 'cachix'
         uses: cachix/install-nix-action@v31
 
-      - if: matrix.installer == 'determinate-installer'
+      - if: matrix.installer == 'determinate'
         uses: DeterminateSystems/nix-installer-action@main
 
-      - if: matrix.installer == 'nixbuild-installer'
+      - if: matrix.installer == 'nixbuild'
         uses: nixbuild/nix-quick-install-action@v35
         with:
           nix_conf: |
             keep-env-derivations = true
             keep-outputs = true
 
-      - if: matrix.installer == 'nixos-installer'
+      - if: matrix.installer == 'nixos'
         uses: NixOS/nix-installer-action@main
 
       - if: matrix.cache == 'magic-nix-cache'
@@ -50,8 +43,7 @@ jobs:
       - if: matrix.cache == 'hestia'
         uses: Mic92/hestia@v3
 
-      - name: Start cache-nix-action (with GC enabled)
-        if: matrix.cache == 'cache-nix-action'
+      - if: matrix.cache == 'cache-nix-action'
         uses: nix-community/cache-nix-action@v7
         with:
           primary-key: nix-macos-${{ hashFiles('**/*.nix') }}
@@ -63,9 +55,5 @@ jobs:
           purge-last-accessed: P1DT12H
           purge-primary-key: never
 
-      - name: Dev Shell Instantiation
-        run: |
-          echo "Benchmarking ${{ matrix.installer }} with ${{ matrix.cache }}..."
-
-          # Native execution
-          time nix --extra-experimental-features "nix-command flakes" develop .#ci --command echo "Success"
+      - name: Time nix develop
+        run: time nix --extra-experimental-features "nix-command flakes" develop --command true

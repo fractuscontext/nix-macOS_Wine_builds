@@ -4,67 +4,102 @@ SPDX-FileCopyrightText: 2026 Claire Tam <claire2026t@posteo.net>
 SPDX-License-Identifier: GPL-3.0-only
 -->
 
-<!-- markdownlint-disable MD013 -->
-# Safer, Reproducible Wine Build for macOS
+<!-- markdownlint-disable MD013 MD033 MD041 -->
+<div align="center">
+
+  <h1>Compiling Wine 11 for macOS</h1>
+
+  <p>Safer, reproducible Wine builds for macOS.</p>
+
+  <p>
+    <a href="https://github.com/fractuscontext/nix-wine-macos/actions/workflows/ci.yml"><img src="https://github.com/fractuscontext/nix-wine-macos/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
+    <a href="https://nixos.org/"><img src="https://img.shields.io/badge/Nix-flake-5277c3?logo=nixos&logoColor=white" alt="Nix flake" /></a>
+    <img src="https://img.shields.io/badge/macOS-x86__64%20%E2%89%A5%2015-000000?logo=apple&logoColor=white" alt="macOS >= 15 | x86_64" />
+    <a href="LICENSES/GPL-3.0-only.txt"><img src="https://img.shields.io/badge/License-GPL--3.0--only-blue" alt="GPL-3.0-only" /></a>
+  </p>
+
+</div>
+
+---
+
+## Why?
 
 Similar to [Gcenx/macOS_Wine_builds](https://github.com/Gcenx/macOS_Wine_builds), but safer and more transparent.
 
-Most community builds are manually uploaded, meaning a compromised machine or broken Xcode version produces an undetectable supply chain risk.
+Most community builds are uploaded by hand, so a compromised machine or a broken Xcode install turns into a supply-chain risk nobody can detect.
 
-## What's working
+## What works
 
-- [x] GnuTLS is working
-- [x] MoltenVK is configured correctly
-- [x] DXMT (v0.80) is bundled by default instead of wined3d
-- [ ] OpenGL 4.2+ support (Not yet)
+- [x] GnuTLS (Working)
+- [x] MoltenVK / Vulkan (Working)
+- [x] DXMT v0.80  (Working)
+- [ ] OpenGL 4.2+ (Not Working)
 
-## How to Build
+Two source forks are available:
 
-You can either 1) fetch the sources used by this repo (e.g., `crossover`, `stable`, or `master`):
+| Fork | Source | Release tag looks like |
+| --- | --- | --- |
+| `latest` | The upstream WineHQ release tag, checked daily | `wine-11.20-…` |
+| `crossover` | CodeWeavers' CrossOver sources | `cx-26.3.0-…` |
+
+## Quick start
+
+You need [Nix](https://nixos.org/download/) with flakes enabled on an Apple Silicon Mac. The build runs natively on aarch64 and cross-compiles x86_64 Wine with Clang.
 
 ```bash
-# Enter the hermetic build environment
+git clone https://github.com/fractuscontext/nix-wine-macos.git
+cd nix-wine-macos
 nix develop
-
-# Fetch source pins (downloads tarballs/git commits safely into the Nix store)
-wine-fetch
-
-# Extract the specific flavor you want to build (e.g., crossover)
-wine-extract crossover
+just clone latest   # or: just clone crossover
+just all
 ```
 
-Or 2) bring your source code if needed:
+Wine binary ends up in `output/wow64`. Run it with `./output/wow64/usr/local/bin/wine winecfg`.
+
+## Manual Build
+
+`just all` runs the steps below in order. Each one is also a recipe of its own, which helps when one step fails and you want to rerun only that step.
 
 ```bash
-# Wipe the default extracted sources first
-rm -rf sources
+nix develop         # install deps & stuff
+just clone latest   # copies source tree out of the Nix store into `sources/wine`
 
-# Put your preferred source tree into `sources/wine`, e.g. Wine 11.11
-git clone --depth 1 --branch "wine-11.11" --single-branch https://gitlab.winehq.org/wine/wine.git sources/wine
+# Alternatively, use your own source:
+# git clone --depth 1 --branch wine-11.20 https://gitlab.winehq.org/wine/wine.git sources/wine
+
+just configure      # configures, please see ./justfile for flag list
+just make           # calls make
+just install        # calls make install, installs into `output/wow64/usr/local`.
+just install-dxmt   # replaces with DXMT
+just bundle         # Copies dylib to make `output/wow64` is self-contained and portable.
 ```
-
-Then, compile using:
 
 ```bash
-nix develop --command build-macos all
+./output/wow64/usr/local/bin/wine winecfg
 ```
 
-> [!TIP]
-> We are using Clang here, so it will spit out x86_64 binaries even if you are building on an Apple Silicon (AArch64) machine.
+Other commands:
 
-Everything will then appear in `./output/wow64` and be fully portable.
+| Command | What it does |
+| --- | --- |
+| `just shell` | Opens a shell with the exact build environment, for running compile commands by hand |
+| `just update-source [pin]` | Updates the source pins with nvfetcher, either all of them or one (`wine-latest`, `crossover-source`) |
+| `just src=../wine out=/tmp/wow64 all` | Builds a different source tree into a different output directory |
+
+Releases are tagged `<flavour>-<yy>.<mmdd>.<hhmm>` in UTC, e.g. `wine-11.20-26.1026.1932` or `cx-26.3.0-26.1026.1932`.
 
 ## Debugging
 
-### `winegcc` / `winebuild` Errors
+> [!TIP]
+> Run compile commands by hand only inside `just shell`. Outside it, the host's `clang`/`ld` gets picked up and the errors mislead you (e.g. `no such file or directory: 'libgcc.a'` or `invalid linker name '-fuse-ld=lld'`).
 
-Always enter the Nix shell first before running failing compile commands directly. Otherwise, the host macOS `ld`/`clang` gets picked up, and the error will mislead you (e.g., `clang: error: no such file or directory: 'libgcc.a'` or `invalid linker name '-fuse-ld=lld'`).
+<details>
+<summary><b><code>winegcc</code> / <code>winebuild</code> errors</b></summary>
 
 ```bash
-# Enter the shell using:
-nix develop ".#default" --system x86_64-darwin --command "zsh"
+nix develop --command just shell
 
-# Inside the hermetic shell:
+# Inside the build shell:
 tools/winegcc/winegcc -o dlls/atmlib/x86_64-windows/atmlib.dll \
   --wine-objdir . -b x86_64-w64-mingw32 -Wl,--wine-builtin -shared \
   dlls/atmlib/atmlib.spec -Wb,--prefer-native dlls/atmlib/x86_64-windows/main.o \
@@ -72,89 +107,85 @@ tools/winegcc/winegcc -o dlls/atmlib/x86_64-windows/atmlib.dll \
   dlls/kernel32/x86_64-windows/libkernel32.a dlls/ntdll/x86_64-windows/libntdll.a
 ```
 
-### Validating Msync
+</details>
+
+<details>
+<summary><b>Validating msync</b></summary>
 
 ```bash
 WINEMSYNC=1 WINEDEBUG="+msync" ./output/wow64/usr/local/bin/wine winecfg
 # Expected output: msync: up and running.
 ```
 
-### `kernel32.dll` Panic (GStreamer Deadlock)
+</details>
+
+<details>
+<summary><b><code>kernel32.dll</code> panic (GStreamer deadlock)</b></summary>
 
 ```text
 wine: could not load kernel32.dll, status c0000135
 ```
 
-To isolate whether GStreamer is sabotaging prefix initialisation:
+To check whether GStreamer is breaking prefix initialisation:
 
 ```bash
-# Remove the broken prefix
-rm -rf ~/.wine
-# Disable GStreamer entirely during boot
-WINEDLLOVERRIDES="winegstreamer=d" ./output/wow64/usr/local/bin/wine clock
+rm -rf ~/.wine                                                       # remove the broken prefix
+WINEDLLOVERRIDES="winegstreamer=d" ./output/wow64/usr/local/bin/wine clock   # boot without GStreamer
 ```
 
-Run clock again; if it opens, that means GStreamer's dependencies are either missing from the bundle or deadlocking via host library conflicts. See [WineHQ #51086](https://bugs.winehq.org/show_bug.cgi?id=51086).
+If clock opens now, GStreamer's dependencies are either missing from the bundle or deadlocking against host libraries. See [WineHQ #51086](https://bugs.winehq.org/show_bug.cgi?id=51086).
 
-### Debugging GnuTLS
+</details>
 
-Run Wine with module debugging enabled to catch exactly where `dlopen` fails to load GnuTLS.
+<details>
+<summary><b>GnuTLS</b></summary>
+
+Find where `dlopen` fails:
 
 ```bash
 WINEDEBUG=+module ./output/wow64/usr/local/bin/wine iexplore.exe "https://google.com" 2>&1 | grep -E "(dlopen|gnutls)"
 ```
 
-*Look for the following error in the output:*
+The failure looks like this:
 
 ```text
 0244:err:winediag:process_attach Failed to load libgnutls, secure connections will not be available.
 ```
 
-Check the runtime directory to see if the libraries are present and correctly linked to Wine's crypto modules.
+Check the libraries are in the bundle and linked to Wine's crypto modules:
 
 ```bash
-# 1. Move into the runtime directory
 cd ./output/wow64/usr/local/lib/wine/x86_64-unix
-
-# 2. Check what GnuTLS files actually exist in the bundle
-ls -l | grep gnutls
-
-# 3. Check Wine's core crypto libraries for GnuTLS linkage
-# (Note: Use these rather than avicap32.so, which is primarily for webcams)
-otool -L bcrypt.so | grep gnutls
+ls -l | grep gnutls                 # what's actually bundled
+otool -L bcrypt.so | grep gnutls    # crypto modules (not avicap32.so, that's webcams)
 otool -L crypt32.so | grep gnutls
-
-# 4. Inspect standard dylib linkage and relative loader paths
-otool -L avicap32.so
+otool -L avicap32.so                # general dylib linkage and loader paths
 ```
 
-To test if macOS `dyld` can successfully load the library without Wine's overhead, we use Python's `ctypes`.
-
-**Important:** Relying solely on `arch -x86_64 python3` on the host is incorrect. You must load a Nix shell with the proper architecture specifics and the `nixpkgs-26.05-darwin` channel.
+To test whether `dyld` can load the library without Wine, use an x86_64 Python from the `nixpkgs-26.05-darwin` channel. The host's `arch -x86_64 python3` is not equivalent.
 
 ```bash
-# 1. Enter the appropriate Nix shell with x86_64 architecture and the correct channel
 nix shell --system x86_64-darwin nixpkgs/nixpkgs-26.05-darwin#python3
-
-# 2. Test if the libraries load cleanly inside the Nix environment
 python3 -c "import ctypes; ctypes.cdll.LoadLibrary('./libgnutls.30.dylib')" || \
 python3 -c "import ctypes; ctypes.cdll.LoadLibrary('./libgnutls.dylib')"
 ```
 
-### Validating MoltenVK
+</details>
+
+<details>
+<summary><b>Validating MoltenVK</b></summary>
 
 ```bash
 env MVK_CONFIG_LOG_LEVEL=3 /path_to/wine /path_to/dxcapsviewer.exe
 ```
 
-Expected output if MoltenVK is configured correctly, which should be the case by default:
+Expected output:
 
 ```text
 [mvk-info] MoltenVK version 1.4.1, supporting Vulkan version 1.4.341.
   The following 153 Vulkan extensions are supported:
   VK_KHR_16bit_storage v1
   ...
-  VK_NV_fragment_shader_barycentric v1
 [mvk-info] GPU device:
   model: Apple M2
   type: Integrated
@@ -162,9 +193,12 @@ Expected output if MoltenVK is configured correctly, which should be the case by
   ...
 ```
 
-### Running with DXMT
+</details>
 
-Download the [DxCapsViewer](https://github.com/microsoft/DxCapsViewer) release `.exe` for testing.
+<details>
+<summary><b>Running with DXMT</b></summary>
+
+Grab the [DxCapsViewer](https://github.com/microsoft/DxCapsViewer) release `.exe` for testing.
 
 ```bash
 WINE="./output/wow64/usr/local/bin/wine"
@@ -176,5 +210,10 @@ export MTL_HUD_ENABLED=1
 "$WINE" /path/to/dxcapsviewer.exe 2>&1 | grep -iE "err:module|winemetal|d3d11|dxgi"
 ```
 
-> [!TIP]
-> DXMT 0.8 only supports DirectX 10 / 11. D3D9 operations will correctly fallback to standard `wined3d`, logging `wined3d_guess_card_vendor "Apple"`. This is expected.
+DXMT 0.8 only supports DirectX 10/11. D3D9 falls back to `wined3d` and logs `wined3d_guess_card_vendor "Apple"`; that's expected.
+
+</details>
+
+## License
+
+[GPL-3.0-only](LICENSES/GPL-3.0-only.txt). Generated and config files are [CC0-1.0](LICENSES/CC0-1.0.txt) (see [`REUSE.toml`](REUSE.toml)).

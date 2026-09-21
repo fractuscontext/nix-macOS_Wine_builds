@@ -1,0 +1,99 @@
+# SPDX-FileCopyrightText: 2026 Claire Tam <claire2026t@posteo.net>
+#
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Comment `/build` on a PR (owner/members/collaborators only) for a full build. Never releases.
+# Only `ack` and `reply` can write to the PR; they never check out or run PR code.
+name: PR Build
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+jobs:
+  ack:
+    if: >-
+      github.event.issue.pull_request &&
+      github.event.comment.body == '/build' &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: React to /build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMENT: ${{ github.event.comment.id }}
+        run: gh api "repos/$GITHUB_REPOSITORY/issues/comments/$COMMENT/reactions" -f content=rocket
+
+  build:
+    needs: ack
+    runs-on: macos-15
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      artifact-url: ${{ steps.upload.outputs.artifact-url }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Diff pins against where the PR branched off, not the base branch's current tip
+      - name: Find PR Base
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.issue.number }}
+        run: |
+          base_ref=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json baseRefName --jq .baseRefName)
+          git fetch "https://github.com/$GITHUB_REPOSITORY" "$base_ref"
+          echo "base=$(git merge-base HEAD FETCH_HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/setup
+        with:
+          trusted: "false"
+
+      - name: just ci
+        env:
+          CI_EVENT: issue_comment
+          CI_BASE: ${{ steps.pr.outputs.base }}
+        run: nix develop --command just ci
+
+      - name: Upload Build
+        id: upload
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: wine-pr${{ github.event.issue.number }}-${{ github.run_id }}
+          path: output/*.zip
+          compression-level: 0
+          retention-days: 7
+
+  reply:
+    needs: [ack, build]
+    if: ${{ always() && needs.ack.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Reply with Result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.issue.number }}
+          RESULT: ${{ needs.build.result }}
+          ARTIFACT: ${{ needs.build.outputs.artifact-url }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          case "$RESULT" in
+            success) body="✅ \`/build\` succeeded." ;;
+            cancelled) body="⏹️ \`/build\` was cancelled." ;;
+            *) body="❌ \`/build\` failed." ;;
+          esac
+          body+=" [Logs]($RUN)"
+          [ -n "$ARTIFACT" ] && body+=" · [Download build]($ARTIFACT) (kept 7 days)"
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$body"

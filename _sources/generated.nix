@@ -14,32 +14,12 @@
       sha256 = "sha256-rJnIyks4SPPoF4QTXwI98ma2HCNFcm6lWlCz4DDdaHI=";
     };
   };
-  wine-master = {
-    pname = "wine-master";
-    version = "dfa9629347841de01d6a2113eab3ecf886e017fc";
-    src = fetchgit {
-      url = "https://gitlab.winehq.org/wine/wine.git";
-      rev = "dfa9629347841de01d6a2113eab3ecf886e017fc";
-      fetchSubmodules = false;
-      deepClone = false;
-      leaveDotGit = false;
-      sparseCheckout = [ ];
-      sha256 = "sha256-QLqcO+LOKIiCunK5fTm7yOy2RZyNLqQowHmdlux+CWk=";
+  wine-latest = {
+    pname = "wine-latest";
+    version = "11.20";
+    src = fetchTarball {
+      url = "https://gitlab.winehq.org/wine/wine/-/archive/wine-11.20/wine-wine-11.20.tar.gz";
+      sha256 = "sha256-FV9Ey13Q3H3j4snyiUcVsmJxdk6i7Nyfb8hVAJ4GX/o=";
     };
-    date = "2026-09-02";
-  };
-  wine-stable = {
-    pname = "wine-stable";
-    version = "db11d0fe6a169c457e23d007e20404643d067aa8";
-    src = fetchgit {
-      url = "https://gitlab.winehq.org/wine/wine.git";
-      rev = "db11d0fe6a169c457e23d007e20404643d067aa8";
-      fetchSubmodules = false;
-      deepClone = false;
-      leaveDotGit = false;
-      sparseCheckout = [ ];
-      sha256 = "sha256-3jJ2paulqgMLyLR8g5bxwJuuusAMZSrnw+X+nFhYt+c=";
-    };
-    date = "2026-01-13";
   };
 }

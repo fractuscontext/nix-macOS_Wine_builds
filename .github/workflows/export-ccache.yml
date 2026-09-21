@@ -2,34 +2,30 @@
 #
 # SPDX-License-Identifier: GPL-3.0-only
 
-name: Upload ccache as Artifact
+# Download a CI ccache as an artifact, e.g. to seed a local .ccache.
+name: Export ccache
 
 on:
   workflow_dispatch:
     inputs:
       cache_key:
-        description: "Exact Cache Key to download (e.g., macOS-ccache-123456-1)"
+        description: "Exact cache key (e.g. macOS-ccache-123456-1)"
         required: true
         type: string
 
 jobs:
-  cache-extract:
+  export:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Restore ccache
-        uses: actions/cache/restore@v6
+      - uses: actions/cache/restore@v6
         with:
           path: .ccache
           key: ${{ inputs.cache_key }}
           fail-on-cache-miss: true
 
-      - name: Upload ccache as artifact
-        uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7
         with:
-          name: extracted-ccache-artifact
+          name: ccache-${{ inputs.cache_key }}
           include-hidden-files: true
           path: .ccache
           retention-days: 7

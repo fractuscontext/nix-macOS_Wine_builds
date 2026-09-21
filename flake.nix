@@ -28,10 +28,11 @@
     }:
     let
       # We added linux architectures so GitHub's ubuntu-latest runners
-      # can evaluate the flake and run the 'wine-fetch' cronjob.
+      # can evaluate the flake and run the 'just update-source' cronjob.
+      # Builds run on aarch64-darwin and target x86_64-darwin (targetPkgs),
+      # so x86_64-darwin is deliberately not a host system here.
       systems = [
         "aarch64-darwin"
-        "x86_64-darwin"
         "x86_64-linux"
         "aarch64-linux"
       ];
@@ -71,130 +72,52 @@
         }
       );
 
+      # Pinned source trees: `nix build .#source-crossover` / `.#source-latest`
+      packages = forAllSystems (
+        system: import ./nix/sources.nix { pkgs = import nixpkgs { inherit system; }; }
+      );
+
       devShells = forAllSystems (
         system:
         let
           buildPkgs = import nixpkgs { inherit system; };
           targetPkgs = import nixpkgs-darwin { system = "x86_64-darwin"; };
+          inherit (buildPkgs) lib;
           isDarwin = buildPkgs.stdenv.isDarwin;
 
-          pre-commit-check = self.checks.${system}.pre-commit-check;
-
-          sourcesFile = ./_sources/generated.nix;
-          hasSources = builtins.pathExists sourcesFile;
-          sources = if hasSources then buildPkgs.callPackage sourcesFile { } else { };
-
-          wine-fetch = buildPkgs.writeShellScriptBin "wine-fetch" ''
-            set -euo pipefail
-            echo "[*] Updating Wine/CrossOver pins using nvfetcher..."
-            ${buildPkgs.nvfetcher}/bin/nvfetcher -c nvfetcher.toml
-            echo "[*] Done! Remember to exit and re-enter your shell to load the new paths."
-          '';
-
-          # Script 2: Extract specific source to a local directory
-          wine-extract = buildPkgs.writeShellScriptBin "wine-extract" ''
-            set -euo pipefail
-
-            if [ $# -lt 1 ]; then
-              echo "Usage: wine-extract <crossover|master|stable> [target-dir]"
-              exit 1
-            fi
-
-            FLAVOUR=$1
-            TARGET_DIR=''${2:-sources/wine}
-
-            case "$FLAVOUR" in
-              crossover)
-                SRC="${if hasSources then sources."crossover-source".src else ""}"
-                VERSION="${if hasSources then sources."crossover-source".version else ""}"
-                PREFIX="cx"
-                ;;
-              master)
-                SRC="${if hasSources then sources."wine-master".src else ""}"
-                VERSION="${if hasSources then sources."wine-master".version else ""}"
-                PREFIX="master"
-                ;;
-              stable)
-                SRC="${if hasSources then sources."wine-stable".src else ""}"
-                VERSION="${if hasSources then sources."wine-stable".version else ""}"
-                PREFIX="stable"
-                ;;
-              *)
-                echo "Error: Unknown flavour '$FLAVOUR'."
-                exit 1
-                ;;
-            esac
-
-            if [ -z "$SRC" ]; then
-              echo "Error: Source not found. You must run 'wine-fetch' first."
-              exit 1
-            fi
-
-            echo "[*] Extracting $FLAVOUR ($VERSION) from Nix store to $TARGET_DIR..."
-
-            rm -rf "$TARGET_DIR"
-            mkdir -p "$(dirname "$TARGET_DIR")"
-
-            if [ -d "$SRC" ]; then
-              cp -R "$SRC" "$TARGET_DIR"
-              chmod -R +w "$TARGET_DIR"
-            elif [ -f "$SRC" ]; then
-              TMP_EXTRACT=$(mktemp -d)
-              ${buildPkgs.gnutar}/bin/tar -I ${buildPkgs.pigz}/bin/pigz -xf "$SRC" -C "$TMP_EXTRACT" sources/wine
-              mv "$TMP_EXTRACT/sources/wine" "$TARGET_DIR"
-              rm -rf "$TMP_EXTRACT"
-            fi
-
-            echo "$PREFIX-$VERSION" > "$TARGET_DIR/WINE_FLAVOUR"
-            echo "[*] Finished extracting to $TARGET_DIR"
-          '';
-
-          # Script 3: The actual macOS build script
-          # (We only evaluate this if we are actually on macOS, avoiding cross-OS evaluation errors)
-          makeWowShell =
-            { isCi }:
-            let
-              buildWowScript =
-                if isDarwin then
-                  (import ./scripts/build-macos.nix {
-                    inherit buildPkgs targetPkgs mac-bundler;
-                    srcDir = "sources/wine";
-                    installDir = "output/wow64";
-                    silent = isCi;
-                  })
-                else
-                  buildPkgs.hello;
-            in
-            buildPkgs.mkShell {
-              name = if isCi then "wow64-ci-env" else "wow64-dev-env";
-
-              packages = [
-                buildPkgs.nvfetcher
-                wine-fetch
-                wine-extract
-              ]
-              ++ buildPkgs.lib.optionals isDarwin [ buildWowScript ];
-
-              shellHook = ''
-                ${pre-commit-check.shellHook}
-                echo "🍷 Loaded Wow64 build environment (CI: ${if isCi then "true" else "false"})"
-                if [ "${if isDarwin then "true" else "false"}" = "false" ]; then
-                  echo "Notice: You are on Linux. Only 'wine-fetch' is available here."
-                else
-                  echo "Standard Usage:"
-                  echo "  wine-fetch"
-                  echo "  wine-extract crossover"
-                  echo "  build-macos all"
-                fi
-              '';
-            };
+          # Only forced on macOS, avoiding cross-OS evaluation errors
+          toolchain = import ./nix/toolchain.nix { inherit buildPkgs targetPkgs mac-bundler; };
         in
         {
-          # Locally, 'nix develop' uses this one (verbose)
-          default = makeWowShell { isCi = false; };
+          default = buildPkgs.mkShell {
+            name = "wow64-dev-env";
 
-          # GitHub Actions will use this one (silent)
-          ci = makeWowShell { isCi = true; };
+            packages =
+              with buildPkgs;
+              [
+                bashInteractive
+                just
+                nvfetcher
+                git
+                python3
+              ]
+              ++ lib.optionals isDarwin toolchain.packages;
+
+            env = lib.optionalAttrs isDarwin toolchain.env;
+
+            shellHook = ''
+              ${self.checks.${system}.pre-commit-check.shellHook}
+              echo "🍷 Loaded Wow64 build environment"
+              if [ "${lib.boolToString isDarwin}" = "false" ]; then
+                echo "Notice: You are on Linux. Only 'just update-source' and 'just clone' are available here."
+              else
+                echo "Standard Usage:"
+                echo "  just update-source"
+                echo "  just clone crossover"
+                echo "  just all"
+              fi
+            '';
+          };
         }
       );
     };

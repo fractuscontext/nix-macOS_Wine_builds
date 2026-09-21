@@ -1,0 +1,57 @@
+# SPDX-FileCopyrightText: 2026 Claire Tam <claire2026t@posteo.net>
+#
+# SPDX-License-Identifier: GPL-3.0-only
+
+# CrossOver has no upstream feed, so its version is pinned by hand here.
+name: Update CrossOver
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "CrossOver version (e.g. 26.3.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Pin Version in nvfetcher.toml
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]] || { echo "Not a version: $VERSION"; exit 1; }
+          sed -i "s/src.manual = \".*\"/src.manual = \"$VERSION\"/" nvfetcher.toml
+
+      - uses: nixbuild/nix-quick-install-action@v35
+      - uses: Mic92/hestia@v3
+
+      - name: just update-source crossover-source
+        run: |
+          for i in {1..5}; do
+            nix develop --command just update-source crossover-source && exit 0
+            s=$?
+            echo "Attempt $i/5 failed, retrying in 10 seconds..."
+            sleep 10
+          done
+          exit "$s"
+
+      # Keep `nix develop` from installing pre-commit hooks that would run on the bot's commit
+      - name: Disable Git Hooks
+        run: git config core.hooksPath /dev/null
+
+      - uses: peter-evans/create-pull-request@v8
+        with:
+          branch: update/crossover-${{ inputs.version }}
+          title: "Update CrossOver to ${{ inputs.version }}"
+          commit-message: "chore(sources): bump crossover to ${{ inputs.version }}"
+          body: Pins CrossOver `${{ inputs.version }}` in `nvfetcher.toml` and regenerates its source hash.
