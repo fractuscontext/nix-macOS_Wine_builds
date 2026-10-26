@@ -1,0 +1,31 @@
+{
+    "crossover-source": {
+        "cargoLock": null,
+        "date": null,
+        "extract": null,
+        "name": "crossover-source",
+        "passthru": null,
+        "pinned": false,
+        "src": {
+            "name": null,
+            "sha256": "sha256-rJnIyks4SPPoF4QTXwI98ma2HCNFcm6lWlCz4DDdaHI=",
+            "type": "url",
+            "url": "https://media.codeweavers.com/pub/crossover/source/crossover-sources-26.3.0.tar.gz"
+        },
+        "version": "26.3.0"
+    },
+    "wine-latest": {
+        "cargoLock": null,
+        "date": null,
+        "extract": null,
+        "name": "wine-latest",
+        "passthru": null,
+        "pinned": false,
+        "src": {
+            "sha256": "sha256-FV9Ey13Q3H3j4snyiUcVsmJxdk6i7Nyfb8hVAJ4GX/o=",
+            "type": "tarball",
+            "url": "https://gitlab.winehq.org/wine/wine/-/archive/wine-11.20/wine-wine-11.20.tar.gz"
+        },
+        "version": "11.20"
+    }
+}
