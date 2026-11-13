@@ -16,10 +16,10 @@
   };
   wine-latest = {
     pname = "wine-latest";
-    version = "11.21";
+    version = "11.22";
     src = fetchTarball {
-      url = "https://gitlab.winehq.org/wine/wine/-/archive/wine-11.21/wine-wine-11.21.tar.gz";
-      sha256 = "sha256-kgcx5xSM9IFk7aSibePch0/YC8YNiWRPyGSL9mwKU4Y=";
+      url = "https://gitlab.winehq.org/wine/wine/-/archive/wine-11.22/wine-wine-11.22.tar.gz";
+      sha256 = "sha256-u5nJGAQDCfurY/wzLfbdmJvji45YavkDKuhHGNiVY3g=";
     };
   };
 }
