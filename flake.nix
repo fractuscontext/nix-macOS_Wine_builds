@@ -8,7 +8,7 @@
     nixpkgs-darwin.url = "git+https://github.com/NixOS/nixpkgs?shallow=1&ref=nixpkgs-26.05-darwin";
 
     mac-bundler = {
-      url = "github:fractuscontext/nix-dylibbundler";
+      url = "path:./nix-dylibbundler";
       inputs.nixpkgs.follows = "nixpkgs-darwin";
     };
 

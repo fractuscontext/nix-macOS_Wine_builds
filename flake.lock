@@ -83,18 +83,14 @@
         ]
       },
       "locked": {
-        "lastModified": 1785689778,
-        "narHash": "sha256-UvjFkaKR2WdiMFu6CyeMU8W2e5lYxgjUcSsKeVwfNPA=",
-        "owner": "fractuscontext",
-        "repo": "nix-dylibbundler",
-        "rev": "f884518e71937c5cb606fd1ee67e5aaede9a993b",
-        "type": "github"
+        "path": "./nix-dylibbundler",
+        "type": "path"
       },
       "original": {
-        "owner": "fractuscontext",
-        "repo": "nix-dylibbundler",
-        "type": "github"
-      }
+        "path": "./nix-dylibbundler",
+        "type": "path"
+      },
+      "parent": []
     },
     "nixpkgs": {
       "locked": {
