@@ -70,7 +70,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: wine-pr${{ github.event.issue.number }}-${{ github.run_id }}
-          path: output/*.zip
+          path: |
+            output/*.zip
+            output/*.report
           compression-level: 0
           retention-days: 7
 

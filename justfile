@@ -50,6 +50,23 @@ default:
 update-source pin="":
     nvfetcher -c nvfetcher.toml {{ if pin == "" { "" } else { "--filter '^" + pin + "$'" } }}
 
+# Set a hand-pinned (src.manual) version in nvfetcher.toml, e.g. `just pin crossover-source 26.4.0`
+[group('source')]
+pin name version:
+    #!/usr/bin/env python3
+    import re, sys
+    name, version = "{{ name }}", "{{ version }}"
+    if not re.fullmatch(r"[0-9]+(\.[0-9]+)*", version):
+        sys.exit(f"Not a version: {version}")
+    text = open("nvfetcher.toml").read()
+    # Only the src.manual line inside this pin's [section]
+    section = re.compile(rf"(^\[{re.escape(name)}\]\n(?:(?!\[).*\n)*?src\.manual = )\"[^\"]*\"", re.M)
+    text, n = section.subn(rf'\g<1>"{version}"', text)
+    if n != 1:
+        sys.exit(f"No src.manual pin named {name} in nvfetcher.toml")
+    open("nvfetcher.toml", "w").write(text)
+    print(f"[*] {name} = {version}; run `just update-source {name}`")
+
 # Copy a pinned source tree (nix/sources.nix) out of the Nix store: crossover | latest
 [group('source')]
 clone flavour="latest" target=src:
