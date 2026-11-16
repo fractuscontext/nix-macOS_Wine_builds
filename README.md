@@ -33,6 +33,7 @@ Most community builds are uploaded by hand, so a compromised machine or a broken
 - [x] GnuTLS (Working)
 - [x] MoltenVK / Vulkan (Working)
 - [x] DXMT v0.80  (Working)
+- [x] Wine Mono / .NET, bundled (Working)
 - [ ] OpenGL 4.2+ (Not Working)
 
 Two source forks are available:
@@ -71,6 +72,7 @@ just configure      # configures, please see ./justfile for flag list
 just make           # calls make
 just install        # calls make install, installs into `output/wow64/usr/local`.
 just install-dxmt   # replaces with DXMT
+just install-mono   # ships the Wine Mono matching the source in share/wine/mono
 just bundle         # Copies dylib to make `output/wow64` is self-contained and portable.
 ```
 
@@ -83,7 +85,7 @@ Other commands:
 | Command | What it does |
 | --- | --- |
 | `just shell` | Opens a shell with the exact build environment, for running compile commands by hand |
-| `just update-source [pin]` | Updates the source pins with nvfetcher, either all of them or one (`wine-latest`, `crossover-source`, `winetest`, `winetest64`) |
+| `just update-source [pin]` | Updates the source pins with nvfetcher, either all of them or one (`wine-latest`, `crossover-source`, `wine-mono-latest`, `wine-mono-crossover`, `winetest`, `winetest64`) |
 | `just winetest32 [args]` / `just winetest64 [args]` | Runs the pinned 32-/64-bit [WineTest](https://gitlab.winehq.org/wine/wine/-/wikis/Conformance-Tests) against the build, passing your arguments through |
 | `just src=../wine out=/tmp/wow64 all` | Builds a different source tree into a different output directory |
 

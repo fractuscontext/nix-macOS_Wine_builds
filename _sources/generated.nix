@@ -22,6 +22,22 @@
       sha256 = "sha256-u5nJGAQDCfurY/wzLfbdmJvji45YavkDKuhHGNiVY3g=";
     };
   };
+  wine-mono-crossover = {
+    pname = "wine-mono-crossover";
+    version = "10.4.1";
+    src = fetchTarball {
+      url = "https://github.com/wine-mono/wine-mono/releases/download/wine-mono-10.4.1/wine-mono-10.4.1-x86.tar.xz";
+      sha256 = "sha256-LL6ztAz+TrWp73sr+PZ94pKYTqRMEa3ULkgnEzA1C2M=";
+    };
+  };
+  wine-mono-latest = {
+    pname = "wine-mono-latest";
+    version = "11.3.0";
+    src = fetchTarball {
+      url = "https://github.com/wine-mono/wine-mono/releases/download/wine-mono-11.3.0/wine-mono-11.3.0-x86.tar.xz";
+      sha256 = "sha256-binUZQpqPClrDS1KR8mP0QfvDTk68UiMWLmAM/DItm0=";
+    };
+  };
   winetest = {
     pname = "winetest";
     version = "325296";

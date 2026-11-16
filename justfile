@@ -72,9 +72,9 @@ ci:
 shell: ccache-wrappers
     exec bash -i
 
-# configure → make → install → install-dxmt → bundle
+# configure → make → install → install-dxmt → install-mono → bundle
 [group('build')]
-all: configure make install install-dxmt bundle
+all: configure make install install-dxmt install-mono bundle
     @echo "Build pipeline completed successfully."
 
 # Configure Wine for WoW64 (x86_64 + i386)
@@ -148,6 +148,26 @@ make: ccache-wrappers
 install: ccache-wrappers
     mkdir -p "{{ install_dir }}"
     make -C "{{ src_dir }}" install-lib DESTDIR="{{ install_dir }}"
+
+# Ship the Wine Mono matching the source fork in share/wine/mono, so prefixes need no download
+[group('build')]
+install-mono: require-install
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "$(cat "{{ src_dir }}/WINE_FLAVOUR")" in
+      cx-*) flavour=crossover ;;
+      *) flavour=latest ;;
+    esac
+    mono=$(nix build --no-link --print-out-paths ".#mono-$flavour")
+    want=$(sed -n 's/^#define MONO_VERSION "\(.*\)"$/\1/p' "{{ src_dir }}/dlls/appwiz.cpl/addons.c")
+    [ -d "$mono/wine-mono-$want" ] || {
+      echo "Error: source wants wine-mono $want, pin has $(ls "$mono"). Bump it in nvfetcher.toml."; exit 1; }
+    dest="{{ install_dir }}/usr/local/share/wine/mono"
+    rm -rf "$dest"
+    mkdir -p "$dest"
+    cp -R "$mono/wine-mono-$want" "$dest/"
+    chmod -R u+w "$dest"
+    echo "[*] Installed wine-mono $want"
 
 # Overwrite Wine's builtin d3d DLLs and Unix SO with DXMT's
 [group('build')]

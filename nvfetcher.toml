@@ -6,6 +6,17 @@ fetch.tarball = "https://gitlab.winehq.org/wine/wine/-/archive/wine-$ver/wine-wi
 src.manual = "26.3.0"
 fetch.url = "https://media.codeweavers.com/pub/crossover/source/crossover-sources-$ver.tar.gz"
 
+# Wine Mono must match MONO_VERSION in dlls/appwiz.cpl/addons.c of the source it runs with.
+# wine-latest: read it from the same release tag, so the daily bump keeps them in sync.
+[wine-mono-latest]
+src.cmd = "tag=$(git ls-remote --tags --refs https://gitlab.winehq.org/wine/wine.git 'wine-*' | sed 's|.*refs/tags/||' | grep -E '^wine-[0-9]+[.][0-9]+([.][0-9]+)?$' | sort -V | tail -n 1) && curl -fsL \"https://gitlab.winehq.org/wine/wine/-/raw/$tag/dlls/appwiz.cpl/addons.c\" | sed -n 's/^#define MONO_VERSION \"\\(.*\\)\"$/\\1/p'"
+fetch.tarball = "https://github.com/wine-mono/wine-mono/releases/download/wine-mono-$ver/wine-mono-$ver-x86.tar.xz"
+
+# crossover-source is pinned by hand; bump this together with it
+[wine-mono-crossover]
+src.manual = "10.4.1"
+fetch.tarball = "https://github.com/wine-mono/wine-mono/releases/download/wine-mono-$ver/wine-mono-$ver-x86.tar.xz"
+
 # Daily WineTest builds. The moving master URL redirects to a fixed job URL; the
 # job id is the version, so the pinned hash stays valid until the next bump.
 [winetest]
