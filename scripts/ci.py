@@ -31,7 +31,6 @@ import os
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -79,10 +78,6 @@ def decide(event: str, ref: str, bumps: tuple[str, ...], flavour: str, release: 
             raise SystemExit(f"Unknown CI_EVENT: {event!r}")
 
 
-def release_tag(wine_flavour: str, now: datetime) -> str:
-    return f"{wine_flavour}-{now:%y.%m%d.%H%M}"
-
-
 # --- effects -----------------------------------------------------------------
 
 
@@ -109,9 +104,9 @@ def configure(flavour: str) -> None:
     run("just", "configure")
 
 
-def build(flavour: str, now: datetime) -> str:
+def build(flavour: str) -> str:
     run("just", "clone", flavour)
-    tag = release_tag((SOURCE / "WINE_FLAVOUR").read_text().strip(), now)
+    tag = (SOURCE / "WINE_FLAVOUR").read_text().strip()
     prefix = (OUT / tag).absolute()
     run("just", f"out={prefix}", "all")
     run("ditto", "-c", "-k", "--keepParent", prefix, OUT / f"{tag}.zip")
@@ -155,8 +150,7 @@ def main() -> None:
     if env("CI_DRY_RUN") == "1":
         return
 
-    now = datetime.now(UTC)
-    step = (lambda f: build(f, now)) if plan.build else configure
+    step = build if plan.build else configure
     results = {flavour: attempt(step, flavour) for flavour in plan.flavours}
 
     # Release whatever succeeded, then fail the job if anything didn't

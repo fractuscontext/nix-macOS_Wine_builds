@@ -57,6 +57,8 @@ jobs:
         run: |
           target=$(git rev-parse HEAD)
           while read -r tag; do
+            # Tags are just the Wine version now, so replace an existing release
+            gh release delete "$tag" --cleanup-tag -y 2>/dev/null || true
             gh release create "$tag" "output/$tag.zip" --target "$target" --title "$tag" --generate-notes
           done < output/releases.txt
 
