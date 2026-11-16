@@ -45,6 +45,15 @@ jobs:
           path: .ccache
           key: ${{ steps.setup.outputs.ccache-key }}
 
+      - name: Upload WineTest Reports
+        if: ${{ !cancelled() && steps.ci.outputs.built == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: winetest-${{ github.run_id }}
+          path: output/*.report
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Release
         if: ${{ !cancelled() && steps.ci.outputs.to_release == 'true' }}
         env:

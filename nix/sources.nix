@@ -32,13 +32,6 @@ in
       tar -I pigz -xf ${src} -C $out --strip-components=2 sources/wine
     '';
 
-  # Daily WineTest executables (32- and 64-bit), side by side: `nix build .#winetest`
-  winetest = pkgs.runCommand "winetest-${pins.winetest64.version}" { } ''
-    mkdir -p $out
-    cp ${pins.winetest.src} $out/winetest.exe
-    cp ${pins.winetest64.src} $out/winetest64.exe
-  '';
-
   # Wine Mono per source fork, laid out as Wine's share/wine/mono expects:
   # $out/wine-mono-<version>/. `just install-mono` copies the matching one.
   mono-latest = mkMono pins.wine-mono-latest;

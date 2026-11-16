@@ -62,6 +62,15 @@ jobs:
             gh release create "$tag" "output/$tag.zip" --target "$target" --title "$tag" --generate-notes
           done < output/releases.txt
 
+      - name: Upload WineTest Reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: winetest-${{ inputs.flavour }}-${{ github.run_id }}
+          path: output/*.report
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Upload Build
         if: ${{ !cancelled() && steps.ci.outputs.to_release != 'true' }}
         uses: actions/upload-artifact@v7

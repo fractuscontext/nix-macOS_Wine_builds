@@ -14,6 +14,7 @@ src_dir := absolute_path(src)
 install_dir := absolute_path(out)
 wine_lib := install_dir / "usr/local/lib/wine"
 ccache_dir := justfile_directory() / ".ccache"
+winetest_dir := justfile_directory() / ".winetest"
 
 # GitHub Actions sets CI=true; keep compiler output quiet there
 verbose := if env("CI", "") == "true" { "" } else { "-v" }
@@ -49,6 +50,23 @@ default:
 [group('source')]
 update-source pin="":
     nvfetcher -c nvfetcher.toml {{ if pin == "" { "" } else { "--filter '^" + pin + "$'" } }}
+
+# Set a hand-pinned (src.manual) version in nvfetcher.toml, e.g. `just pin crossover-source 26.4.0`
+[group('source')]
+pin name version:
+    #!/usr/bin/env python3
+    import re, sys
+    name, version = "{{ name }}", "{{ version }}"
+    if not re.fullmatch(r"[0-9]+(\.[0-9]+)*", version):
+        sys.exit(f"Not a version: {version}")
+    text = open("nvfetcher.toml").read()
+    # Only the src.manual line inside this pin's [section]
+    section = re.compile(rf"(^\[{re.escape(name)}\]\n(?:(?!\[).*\n)*?src\.manual = )\"[^\"]*\"", re.M)
+    text, n = section.subn(rf'\g<1>"{version}"', text)
+    if n != 1:
+        sys.exit(f"No src.manual pin named {name} in nvfetcher.toml")
+    open("nvfetcher.toml", "w").write(text)
+    print(f"[*] {name} = {version}; run `just update-source {name}`")
 
 # Copy a pinned source tree (nix/sources.nix) out of the Nix store: crossover | latest
 [group('source')]
@@ -181,17 +199,25 @@ install-dxmt: require-install
 bundle: require-install
     wine-bundle-libs "{{ wine_lib }}/x86_64-unix"
 
-# Run the pinned 32-bit WineTest with your args, e.g. `just winetest32 -c -o out.report d3d9`
+# Run today's 32-bit WineTest with your args, e.g. `just winetest32 -c -o out.report d3d9`
 [group('test')]
 [positional-arguments]
-winetest32 *args: require-install
-    "{{ install_dir }}/usr/local/bin/wine" "$(nix build --no-link --print-out-paths .#winetest)/winetest.exe" "$@"
+winetest32 *args: require-install (fetch-winetest "winetest.exe")
+    "{{ install_dir }}/usr/local/bin/wine" "{{ winetest_dir }}/winetest.exe" "$@"
 
-# Run the pinned 64-bit WineTest with your args, e.g. `just winetest64 -c -o out.report d3d11`
+# Run today's 64-bit WineTest with your args, e.g. `just winetest64 -c -o out.report d3d11`
 [group('test')]
 [positional-arguments]
-winetest64 *args: require-install
-    "{{ install_dir }}/usr/local/bin/wine" "$(nix build --no-link --print-out-paths .#winetest)/winetest64.exe" "$@"
+winetest64 *args: require-install (fetch-winetest "winetest64.exe")
+    "{{ install_dir }}/usr/local/bin/wine" "{{ winetest_dir }}/winetest64.exe" "$@"
+
+# WineHQ's daily WineTest artifacts expire within minutes of being superseded, so they
+# can't be pinned; fetch the current one on every run.
+[private]
+fetch-winetest exe:
+    mkdir -p "{{ winetest_dir }}"
+    curl -fsSL --retry 3 -o "{{ winetest_dir }}/{{ exe }}" \
+      "https://gitlab.winehq.org/wine/wine/-/jobs/artifacts/master/raw/{{ exe }}?job=build-daily-winetest"
 
 [private]
 require-install:

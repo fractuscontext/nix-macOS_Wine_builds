@@ -16,13 +16,3 @@ fetch.tarball = "https://github.com/wine-mono/wine-mono/releases/download/wine-m
 [wine-mono-crossover]
 src.manual = "10.4.1"
 fetch.tarball = "https://github.com/wine-mono/wine-mono/releases/download/wine-mono-$ver/wine-mono-$ver-x86.tar.xz"
-
-# Daily WineTest builds. The moving master URL redirects to a fixed job URL; the
-# job id is the version, so the pinned hash stays valid until the next bump.
-[winetest]
-src.cmd = "curl -fsI 'https://gitlab.winehq.org/wine/wine/-/jobs/artifacts/master/raw/winetest.exe?job=build-daily-winetest' | sed -n 's|^[Ll]ocation: .*/jobs/\\([0-9]*\\)/.*|\\1|p'"
-fetch.url = "https://gitlab.winehq.org/wine/wine/-/jobs/$ver/artifacts/raw/winetest.exe"
-
-[winetest64]
-src.cmd = "curl -fsI 'https://gitlab.winehq.org/wine/wine/-/jobs/artifacts/master/raw/winetest64.exe?job=build-daily-winetest' | sed -n 's|^[Ll]ocation: .*/jobs/\\([0-9]*\\)/.*|\\1|p'"
-fetch.url = "https://gitlab.winehq.org/wine/wine/-/jobs/$ver/artifacts/raw/winetest64.exe"

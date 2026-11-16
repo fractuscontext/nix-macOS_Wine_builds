@@ -7,10 +7,17 @@
 
 | Event                         | Flavours             | Does      | Releases   |
 |-------------------------------|----------------------|-----------|------------|
-| push to main with a pin bump  | bumped               | full build| yes        |
-| any other push, pull request  | bumped, else latest  | configure | no         |
-| /build comment on a PR        | bumped, else latest  | full build| no         |
+| push to main with a change    | changed              | full build| yes        |
+| any other push, pull request  | changed, else latest | configure | no         |
+| /build comment on a PR        | changed, else latest | full build| no         |
 | manual dispatch               | CI_FLAVOUR           | full build| CI_RELEASE |
+
+A flavour counts as changed when its source pin moved, or when a file that only
+changes its build (patches/, the DXMT binary patch) differs from CI_BASE.
+
+Every full build ends with a WineTest smoke run (CI_WINETESTS, both arches). A
+test failing inside it is expected and only logged; Wine not producing a report
+at all fails that flavour.
 
 Inputs (environment, so it runs the same locally and on GitHub):
   CI_EVENT    push | pull_request | issue_comment | workflow_dispatch
@@ -18,10 +25,11 @@ Inputs (environment, so it runs the same locally and on GitHub):
   CI_BASE     commit to diff pins against; empty or all-zero means "no bump"
   CI_FLAVOUR  workflow_dispatch only
   CI_RELEASE  workflow_dispatch only, "true" to release
+  CI_WINETESTS  WineTest smoke tests, space separated; "" skips them
   CI_DRY_RUN  "1" prints the plan and stops
 
-Outputs in output/: <tag>.zip per full build, releases.txt with the tags to
-release, and `built` / `to_release` in $GITHUB_OUTPUT when set.
+Outputs in output/: <tag>.zip and <tag>-winetest{32,64}.report per full build,
+releases.txt with the tags to release, and `built` / `to_release` in $GITHUB_OUTPUT when set.
 """
 
 from __future__ import annotations
@@ -43,6 +51,13 @@ MAIN = "refs/heads/main"
 FLAVOURS = {"crossover-source": "crossover", "wine-latest": "latest"}
 DEFAULT_FLAVOUR = "latest"
 
+# Files that change a flavour's build without moving its pin
+REBUILD_PATHS = {
+    "latest": ("patches/wine-latest/", "nix/dxmt-cross-process.py"),
+    "crossover": ("nix/dxmt-cross-process.py",),
+}
+DEFAULT_WINETESTS = "version mscoree"
+
 
 @dataclass(frozen=True)
 class Plan:
@@ -61,6 +76,19 @@ def versions(pins_json: str) -> dict[str, str]:
 
 def bumped(old: dict[str, str], new: dict[str, str]) -> tuple[str, ...]:
     return tuple(flavour for flavour, version in new.items() if old.get(flavour) != version)
+
+
+def touched(paths: list[str]) -> tuple[str, ...]:
+    """Flavours whose build inputs (outside the pins) appear in `paths`."""
+    return tuple(
+        flavour
+        for flavour, prefixes in REBUILD_PATHS.items()
+        if any(path.startswith(prefixes) for path in paths)
+    )
+
+
+def merge(*groups: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(flavour for group in groups for flavour in group))
 
 
 def decide(event: str, ref: str, bumps: tuple[str, ...], flavour: str, release: bool) -> Plan:
@@ -99,6 +127,15 @@ def pins_at(base: str, current: dict[str, str]) -> dict[str, str]:
     return versions(shown.stdout) if shown.returncode == 0 else {}
 
 
+def changed_paths(base: str) -> list[str]:
+    if not base.strip("0"):
+        return []
+    diff = git("diff", "--name-only", base, "HEAD")
+    if diff.returncode != 0:
+        raise SystemExit(f"git diff {base} failed: {diff.stderr.strip()}")
+    return diff.stdout.split()
+
+
 def configure(flavour: str) -> None:
     run("just", "clone", flavour)
     run("just", "configure")
@@ -110,7 +147,27 @@ def build(flavour: str) -> str:
     prefix = (OUT / tag).absolute()
     run("just", f"out={prefix}", "all")
     run("ditto", "-c", "-k", "--keepParent", prefix, OUT / f"{tag}.zip")
+    smoke_test(prefix, tag)
     return tag
+
+
+def smoke_test(prefix: Path, tag: str) -> None:
+    """Run a few WineTest tests against the fresh build, in a throwaway prefix."""
+    tests = os.environ.get("CI_WINETESTS", DEFAULT_WINETESTS).split()
+    if not tests:
+        return
+    env = {**os.environ, "WINEPREFIX": str((OUT / f"{tag}-winetest-prefix").absolute())}
+    for arch in ("32", "64"):
+        report = OUT / f"{tag}-winetest{arch}.report"
+        cmd = ["just", f"out={prefix}", f"winetest{arch}", "-c", "-t", "ci", "-o", str(report.absolute()), *tests]
+        print("+", *cmd, flush=True)
+        # winetest exits non-zero when any test fails; only a missing report means Wine broke
+        subprocess.run(cmd, env=env, check=False)
+        if not report.is_file():
+            raise subprocess.CalledProcessError(1, cmd, f"winetest{arch} produced no report")
+        summary = [line for line in report.read_text(errors="replace").splitlines() if "tests executed" in line]
+        print(f"[ci] winetest{arch}:", *summary, sep="\n  ", flush=True)
+    subprocess.run([prefix / "usr/local/bin/wineserver", "-k"], env=env, check=False)
 
 
 def attempt[T](step: Callable[[str], T], flavour: str) -> T | Literal[False]:
@@ -137,8 +194,9 @@ def main() -> None:
     env = os.environ.get
     event = env("CI_EVENT", "push")
 
+    base = env("CI_BASE", "")
     current = versions(PINS.read_text())
-    bumps = bumped(pins_at(env("CI_BASE", ""), current), current)
+    bumps = merge(bumped(pins_at(base, current), current), touched(changed_paths(base)))
     plan = decide(
         event,
         ref=env("CI_REF", ""),
@@ -146,7 +204,7 @@ def main() -> None:
         flavour=env("CI_FLAVOUR", DEFAULT_FLAVOUR),
         release=env("CI_RELEASE") == "true",
     )
-    print(f"[ci] {event}: bumped={list(bumps)} -> {plan}", flush=True)
+    print(f"[ci] {event}: changed={list(bumps)} -> {plan}", flush=True)
     if env("CI_DRY_RUN") == "1":
         return
 

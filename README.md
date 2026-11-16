@@ -39,10 +39,10 @@ Most community builds are uploaded by hand, so a compromised machine or a broken
 
 Two source forks are available:
 
-| Fork | Source | Release tag looks like |
+| Fork | Source | Release tag |
 | --- | --- | --- |
-| `latest` | The upstream WineHQ release tag, checked daily | `wine-11.20-…` |
-| `crossover` | CodeWeavers' CrossOver sources | `cx-26.3.0-…` |
+| `latest` | The upstream WineHQ release tag, checked daily | `wine-11.22` |
+| `crossover` | CodeWeavers' CrossOver sources | `cx-26.3.0` |
 
 ## Quick start
 
@@ -86,11 +86,24 @@ Other commands:
 | Command | What it does |
 | --- | --- |
 | `just shell` | Opens a shell with the exact build environment, for running compile commands by hand |
-| `just update-source [pin]` | Updates the source pins with nvfetcher, either all of them or one (`wine-latest`, `crossover-source`, `wine-mono-latest`, `wine-mono-crossover`, `winetest`, `winetest64`) |
-| `just winetest32 [args]` / `just winetest64 [args]` | Runs the pinned 32-/64-bit [WineTest](https://gitlab.winehq.org/wine/wine/-/wikis/Conformance-Tests) against the build, passing your arguments through |
+| `just pin <pin> <version>` | Sets a hand-pinned version (`crossover-source`, `wine-mono-crossover`) in `nvfetcher.toml`; follow with `just update-source <pin>` |
+| `just update-source [pin]` | Updates the source pins with nvfetcher, either all of them or one (`wine-latest`, `crossover-source`, `wine-mono-latest`, `wine-mono-crossover`) |
+| `just winetest32 [args]` / `just winetest64 [args]` | Downloads today's 32-/64-bit [WineTest](https://gitlab.winehq.org/wine/wine/-/wikis/Conformance-Tests) and runs it against the build, passing your arguments through |
 | `just src=../wine out=/tmp/wow64 all` | Builds a different source tree into a different output directory |
 
-Releases are tagged `<flavour>-<yy>.<mmdd>.<hhmm>` in UTC, e.g. `wine-11.20-26.1026.1932` or `cx-26.3.0-26.1026.1932`.
+Releases are tagged with the Wine version alone, e.g. `wine-11.22` or `cx-26.3.0`. Rebuilding the same version (say, after a patch change) replaces that release.
+
+## CI
+
+| Workflow | When | What it does |
+| --- | --- | --- |
+| CI | every push and PR | Configures. On `main`, a moved source pin or a change under `patches/wine-latest/` (or to the DXMT binary patch) does a full build and release of that fork |
+| Update Wine (latest tag) | daily | Bumps `wine-latest` with its matching `wine-mono-latest`. Opens a PR |
+| Update CrossOver | manual, takes a version | Pins CrossOver, reads its `MONO_VERSION` and pins `wine-mono-crossover` to match. Opens a PR |
+| Manual Build | manual | Full build of one fork, optionally released |
+| PR Build | `/build` comment on a PR | Full build of the PR, never released |
+
+Every full build ends with a WineTest smoke run (`version mscoree`, 32- and 64-bit; override with `CI_WINETESTS`). Failing tests are only logged, since some always fail (e.g. locale ones); Wine not producing a report at all fails the build. Reports are uploaded as a `winetest-…` artifact, or inside the PR build artifact.
 
 ## Patches
 
@@ -109,7 +122,7 @@ The `crossover` fork (Wine 11.0) doesn't have the remote-layer code these patche
 
 ## Conformance tests
 
-The daily [WineTest](https://gitlab.winehq.org/wine/wine/-/wikis/Conformance-Tests) executables are pinned with nvfetcher (`nix build .#winetest` holds both). Arguments go straight to `winetest.exe` / `winetest64.exe`:
+The daily [WineTest](https://gitlab.winehq.org/wine/wine/-/wikis/Conformance-Tests) executables are not pinned: WineHQ's CI artifacts expire within minutes of the next build, so each run downloads the current one into `.winetest/`. Arguments go straight to `winetest.exe` / `winetest64.exe`:
 
 ```bash
 just winetest64 -h                                  # list WineTest's options
@@ -242,6 +255,33 @@ export MTL_HUD_ENABLED=1
 ```
 
 DXMT 0.8 only supports DirectX 10/11. D3D9 falls back to `wined3d` and logs `wined3d_guess_card_vendor "Apple"`; that's expected.
+
+</details>
+
+<details>
+<summary><b>Testing Chromium / CEF (Steam's UI)</b></summary>
+
+Download the **Sample Application** (`cefclient`) for Windows 64-bit from the [CEF builds](https://cef-builds.spotifycdn.com/index.html) page and unpack it to `/tmp/cef`. It draws through the same out-of-process GPU path as Steam's UI, without an account or launcher in the way.
+
+Run it in a throwaway prefix:
+
+```bash
+WINEPREFIX=/tmp/cefprefix ./output/wow64/usr/local/bin/wine \
+  /tmp/cef/Release/cefclient.exe --url=chrome://gpu --enable-logging=stderr 2> /tmp/cef.log
+```
+
+Working: the page draws, `chrome://gpu` lists hardware acceleration, and resizing doesn't leave the window black. If it stays black, find where it stops:
+
+```bash
+grep -c 'cross-process swapchain not supported' /tmp/cef.log   # DXMT refusal: the dxmt-cross-process.py patch is missing
+grep -ci 'gpu process.*exit\|crash' /tmp/cef.log                # GPU process crash-looping
+WINEDEBUG=+macdrv ./output/wow64/usr/local/bin/wine /tmp/cef/Release/cefclient.exe 2>&1 | grep 'Cross-process child'
+                                                                # winemac 0002 patch missing (stock winemac)
+```
+
+If pages draw but show no text, check for `cannot find the FreeType font library` in the log. Without FreeType Wine still reports fonts but can't rasterise them, which looks like a compositing bug in a screenshot.
+
+`--disable-gpu` (Steam: `-cef-disable-gpu`) falls back to software rendering, which is useful as a control.
 
 </details>
 

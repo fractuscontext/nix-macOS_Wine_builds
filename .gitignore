@@ -3,3 +3,4 @@ sources/
 output/
 debug_suite/
 .pre-commit-config.yaml
+.winetest/
