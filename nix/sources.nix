@@ -45,10 +45,15 @@ in
   mono-crossover = mkMono pins.wine-mono-crossover;
 
   # Newest WineHQ release tag, already unpacked by fetchTarball
+  # Patches in patches/wine-latest/ are applied in name order (see each file's header)
   source-latest =
     with pins.wine-latest;
     mkSourceTree "wine-${version}" ''
       cp -R ${src} $out
-      chmod u+w $out
+      chmod -R u+w $out
+      for p in ${../patches/wine-latest}/*.patch; do
+        echo "applying $(basename "$p")"
+        ${pkgs.patch}/bin/patch -d $out -p1 --forward --batch < "$p"
+      done
     '';
 }

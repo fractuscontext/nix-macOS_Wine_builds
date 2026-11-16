@@ -18,6 +18,16 @@ let
     sha256 = "sha256-Ckrb/7B3+COEfu3iaqsXK1q0L9KbwIsUmEegSNbiznQ=";
   };
 
+  # Drops DXMT's cross-process swapchain refusal so Chromium/CEF's GPU process can present
+  # into the browser's window (needs patches/wine-latest/0002); see dxmt-cross-process.py
+  dxmt =
+    buildPkgs.runCommand "dxmt-v0.80-cross-process" { nativeBuildInputs = [ buildPkgs.python3 ]; }
+      ''
+        cp -R ${dxmtPrecompiled} $out
+        chmod -R u+w $out
+        python3 ${./dxmt-cross-process.py} $out
+      '';
+
   baseDeps = with targetPkgs; [
     freetype
     libpng
@@ -96,6 +106,6 @@ in
     WINE_SDKROOT = "${targetPkgs.apple-sdk_15}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk";
     WINE_PKG_CONFIG_PATH = lib.makeSearchPathOutput "dev" "lib/pkgconfig" baseDeps;
     WINE_LIB_DIRS = "-L${targetPkgs.moltenvk}/lib -L${targetPkgs.vulkan-loader}/lib";
-    WINE_DXMT = "${dxmtPrecompiled}";
+    WINE_DXMT = "${dxmt}";
   };
 }

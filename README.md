@@ -34,6 +34,7 @@ Most community builds are uploaded by hand, so a compromised machine or a broken
 - [x] MoltenVK / Vulkan (Working)
 - [x] DXMT v0.80  (Working)
 - [x] Wine Mono / .NET, bundled (Working)
+- [x] Chromium / CEF with GPU compositing, e.g. `cefclient` (Working, `latest` fork only; see [Patches](#patches))
 - [ ] OpenGL 4.2+ (Not Working)
 
 Two source forks are available:
@@ -90,6 +91,21 @@ Other commands:
 | `just src=../wine out=/tmp/wow64 all` | Builds a different source tree into a different output directory |
 
 Releases are tagged `<flavour>-<yy>.<mmdd>.<hhmm>` in UTC, e.g. `wine-11.20-26.1026.1932` or `cx-26.3.0-26.1026.1932`.
+
+## Patches
+
+The `latest` fork applies everything in [`patches/wine-latest/`](patches/wine-latest/) when the source is pinned (`nix/sources.nix`), so `just clone latest` always gives a patched tree:
+
+| Patch | What it does |
+| --- | --- |
+| `0001-winemac-export-macdrv_functions-for-DXMT` | Exports the `macdrv_functions` table DXMT presents through. Without it, stock Wine gives DXMT no way to draw into a window. |
+| `0002-winemac-cross-process-child-window-metal` | Lets a GPU process present into another process's child window, which is how Chromium/CEF draws ([DXMT #141](https://github.com/3Shain/dxmt/issues/141)). |
+
+Both are rebased from [codeWonderland/neutron](https://github.com/codeWonderland/neutron) (MIT, AI-assisted per its author); each file's header has the details.
+
+DXMT itself still refuses cross-process swapchains, so [`nix/dxmt-cross-process.py`](nix/dxmt-cross-process.py) NOPs that one branch in the prebuilt v0.80 `d3d11.dll` (64- and 32-bit). It checks file hashes and surrounding bytes, so **bumping DXMT fails the build until the offsets are redone** for the new release.
+
+The `crossover` fork (Wine 11.0) doesn't have the remote-layer code these patches build on, so CEF stays black there.
 
 ## Conformance tests
 
