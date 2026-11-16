@@ -22,4 +22,20 @@
       sha256 = "sha256-u5nJGAQDCfurY/wzLfbdmJvji45YavkDKuhHGNiVY3g=";
     };
   };
+  winetest = {
+    pname = "winetest";
+    version = "325296";
+    src = fetchurl {
+      url = "https://gitlab.winehq.org/wine/wine/-/jobs/325296/artifacts/raw/winetest.exe";
+      sha256 = "sha256-Dp3DbZODlacgscygR52r/LNnph92wqglR7tBYB8fOus=";
+    };
+  };
+  winetest64 = {
+    pname = "winetest64";
+    version = "325296";
+    src = fetchurl {
+      url = "https://gitlab.winehq.org/wine/wine/-/jobs/325296/artifacts/raw/winetest64.exe";
+      sha256 = "sha256-FGMP8fiwrjQTsdoK/BgONN3zQji2AAc/2u8Im+xwKR8=";
+    };
+  };
 }

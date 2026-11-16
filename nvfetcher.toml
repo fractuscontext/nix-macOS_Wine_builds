@@ -5,3 +5,13 @@ fetch.tarball = "https://gitlab.winehq.org/wine/wine/-/archive/wine-$ver/wine-wi
 [crossover-source]
 src.manual = "26.3.0"
 fetch.url = "https://media.codeweavers.com/pub/crossover/source/crossover-sources-$ver.tar.gz"
+
+# Daily WineTest builds. The moving master URL redirects to a fixed job URL; the
+# job id is the version, so the pinned hash stays valid until the next bump.
+[winetest]
+src.cmd = "curl -fsI 'https://gitlab.winehq.org/wine/wine/-/jobs/artifacts/master/raw/winetest.exe?job=build-daily-winetest' | sed -n 's|^[Ll]ocation: .*/jobs/\\([0-9]*\\)/.*|\\1|p'"
+fetch.url = "https://gitlab.winehq.org/wine/wine/-/jobs/$ver/artifacts/raw/winetest.exe"
+
+[winetest64]
+src.cmd = "curl -fsI 'https://gitlab.winehq.org/wine/wine/-/jobs/artifacts/master/raw/winetest64.exe?job=build-daily-winetest' | sed -n 's|^[Ll]ocation: .*/jobs/\\([0-9]*\\)/.*|\\1|p'"
+fetch.url = "https://gitlab.winehq.org/wine/wine/-/jobs/$ver/artifacts/raw/winetest64.exe"

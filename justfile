@@ -161,6 +161,18 @@ install-dxmt: require-install
 bundle: require-install
     wine-bundle-libs "{{ wine_lib }}/x86_64-unix"
 
+# Run the pinned 32-bit WineTest with your args, e.g. `just winetest32 -c -o out.report d3d9`
+[group('test')]
+[positional-arguments]
+winetest32 *args: require-install
+    "{{ install_dir }}/usr/local/bin/wine" "$(nix build --no-link --print-out-paths .#winetest)/winetest.exe" "$@"
+
+# Run the pinned 64-bit WineTest with your args, e.g. `just winetest64 -c -o out.report d3d11`
+[group('test')]
+[positional-arguments]
+winetest64 *args: require-install
+    "{{ install_dir }}/usr/local/bin/wine" "$(nix build --no-link --print-out-paths .#winetest)/winetest64.exe" "$@"
+
 [private]
 require-install:
     @[ -d "{{ wine_lib }}/x86_64-unix" ] || { echo "Error: {{ wine_lib }} not found. Run 'just install' first."; exit 1; }

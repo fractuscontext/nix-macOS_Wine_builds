@@ -83,10 +83,23 @@ Other commands:
 | Command | What it does |
 | --- | --- |
 | `just shell` | Opens a shell with the exact build environment, for running compile commands by hand |
-| `just update-source [pin]` | Updates the source pins with nvfetcher, either all of them or one (`wine-latest`, `crossover-source`) |
+| `just update-source [pin]` | Updates the source pins with nvfetcher, either all of them or one (`wine-latest`, `crossover-source`, `winetest`, `winetest64`) |
+| `just winetest32 [args]` / `just winetest64 [args]` | Runs the pinned 32-/64-bit [WineTest](https://gitlab.winehq.org/wine/wine/-/wikis/Conformance-Tests) against the build, passing your arguments through |
 | `just src=../wine out=/tmp/wow64 all` | Builds a different source tree into a different output directory |
 
 Releases are tagged `<flavour>-<yy>.<mmdd>.<hhmm>` in UTC, e.g. `wine-11.20-26.1026.1932` or `cx-26.3.0-26.1026.1932`.
+
+## Conformance tests
+
+The daily [WineTest](https://gitlab.winehq.org/wine/wine/-/wikis/Conformance-Tests) executables are pinned with nvfetcher (`nix build .#winetest` holds both). Arguments go straight to `winetest.exe` / `winetest64.exe`:
+
+```bash
+just winetest64 -h                                  # list WineTest's options
+just winetest64 -c -o out64.report d3d11 dxgi       # selected tests, report kept locally
+just winetest32 -c -m you@example.com -o out32.report   # full run needs -m
+```
+
+Use `-o` to keep the report local: DXMT replaces Wine's d3d DLLs, so this counts as a patched build and test.winehq.org won't accept its results. Set `WINEPREFIX` to keep test runs out of your normal prefix.
 
 ## Debugging
 
