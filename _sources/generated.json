@@ -22,11 +22,11 @@
         "passthru": null,
         "pinned": false,
         "src": {
-            "sha256": "sha256-u5nJGAQDCfurY/wzLfbdmJvji45YavkDKuhHGNiVY3g=",
+            "sha256": "sha256-wXbHcbg6gArB9ZGz5fCuqstWlfru1FSH0g3FMRbTf/E=",
             "type": "tarball",
-            "url": "https://gitlab.winehq.org/wine/wine/-/archive/wine-11.22/wine-wine-11.22.tar.gz"
+            "url": "https://gitlab.winehq.org/wine/wine/-/archive/wine-11.23/wine-wine-11.23.tar.gz"
         },
-        "version": "11.22"
+        "version": "11.23"
     },
     "wine-mono-crossover": {
         "cargoLock": null,
